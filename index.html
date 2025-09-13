@@ -44,6 +44,7 @@
   const el = {
     file: document.getElementById('file'),
     tagsInput: document.getElementById('tagsInput'),
+    descInput: document.getElementById('descInput'), 
     uploadBtn: document.getElementById('uploadBtn'),
     filterInput: document.getElementById('filterInput'),
     clearBtn: document.getElementById('clearBtn'),
@@ -58,14 +59,16 @@
       .split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
   }
 
-  function render(items) {
-    el.grid.innerHTML = items.map(item => `
+  function render(items){
+    el.grid.innerHTML = items.map(it => `
       <article class="card">
-        <img src="${item.url}" alt="" loading="lazy" />
-        <div class="tags">${item.tags.map(t => `<span class="tag">#${t}</span>`).join('')}</div>
+        <img src="${it.url}" alt="" loading="lazy">
+        <div class="tags">${(it.tags||[]).map(t=>`<span class="tag">#${t}</span>`).join('')}</div>
+        ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
       </article>
     `).join('');
-  }
+}
+
 
   function applyFilter() {
     const terms = normalizeTags(el.filterInput.value);
@@ -99,9 +102,12 @@
     const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(key);
     const url = pub?.publicUrl;
 
-    // 3) insert row with tags
-    const { data: row, error: insErr } = await sb.from('photos').insert({ url, tags }).select().single();
-    if (insErr) { alert('Save error'); console.error(insErr); return; }
+    // 3) insert row
+    const ins = await sb.from('photos').insert({
+      url,
+      tags,
+      description: el.descInput.value || null   // 👈 add description
+    }).select().single();
 
     // 4) reset UI & prepend
     el.file.value = '';
