@@ -62,12 +62,15 @@
   function render(items){
     el.grid.innerHTML = items.map(it => `
       <article class="card">
-        <img src="${it.url}" alt="" loading="lazy">
+        <a href="${it.url}" target="_blank" rel="noopener">
+          <img src="${it.url}" alt="" loading="lazy">
+        </a>
         <div class="tags">${(it.tags||[]).map(t=>`<span class="tag">#${t}</span>`).join('')}</div>
         ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
       </article>
     `).join('');
-}
+  }
+
 
 
   function applyFilter() {
