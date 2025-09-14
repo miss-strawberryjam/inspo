@@ -151,10 +151,23 @@
           <div class="tags">${(it.tags || []).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
           ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
           ${it.user_id ? `<p style="margin:6px 0 0; font-size:12px; opacity:.7;">uploader: ${it.user_id.slice(0,8)}…</p>` : ""}
-          <button class="edit-btn" data-id="${it.id}" style="margin-top:6px;">Edit</button>
+          <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="edit-btn" data-id="${it.id}">Edit</button>
+            <button class="del-btn" data-id="${it.id}">Delete</button>
+          </div>
         </article>
       `;
     }).join('');
+  }
+
+
+  function keyFor(item) {
+  if (item.key) return item.key;                  // new rows
+  if (item.url) {                                 // legacy rows with full URL
+    const m = item.url.match(/\/object\/public\/photos\/(.+)$/);
+    if (m) return m[1];
+  }
+  return null;
   }
 
   function applyFilter() {
@@ -255,6 +268,52 @@
     if (idx !== -1) all[idx] = updated;
     applyFilter();
   });
+
+  // Delete photo (file + row)
+  el.grid.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.del-btn');
+    if (!btn) return;
+
+    const { data: userData } = await sb.auth.getUser();
+    const user = userData?.user;
+    if (!user) return alert('Please sign in first.');
+
+    const id = btn.dataset.id;
+    const item = all.find(x => x.id === id);
+    if (!item) return alert('Could not find this photo');
+
+    if (!confirm('Delete this photo? This cannot be undone.')) return;
+
+    // 1) delete file from Storage (ignore if no key)
+    const key = keyFor(item);
+    if (key) {
+      const { error: delObjErr } = await sb.storage.from(BUCKET).remove([key]);
+      if (delObjErr) {
+        console.error(delObjErr);
+        // You can choose to abort here; or continue to delete DB row.
+        // return alert('Could not delete file: ' + delObjErr.message);
+      }
+    }
+
+    // 2) delete DB row (owner-only via RLS)
+    const { error: delRowErr } = await sb
+      .from('photos')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (delRowErr) {
+      console.error(delRowErr);
+      return alert('Could not delete database row: ' + delRowErr.message);
+    }
+
+    // 3) update UI
+    const idx = all.findIndex(x => x.id === id);
+    if (idx !== -1) all.splice(idx, 1);
+    applyFilter();
+  });
+
 
   // boot
   refreshSession();
