@@ -205,20 +205,20 @@
     const item = all.find(x => x.id === id);
     if (!item) { alert('Could not find that photo in local cache'); return; }
 
-    const current = (item.tags || []).join(' ');
-    const input = prompt('Edit tags (comma or space separated):', current);
-    if (input === null) return; // cancelled
+    const tagsInput = prompt('Tags (comma/space separated):', (item.tags||[]).join(' '));
+    if (tagsInput === null) return;
+    const newTags = normalizeTags(tagsInput);
 
-    const newTags = normalizeTags(input);
+    const descInput = prompt('Description:', item.description || '');
+    if (descInput === null) return;
 
-    // Update exactly one row you own
     const { data: updated, error } = await sb
       .from('photos')
-      .update({ tags: newTags })
+      .update({ tags: newTags, description: descInput })
       .eq('id', id)
-      .eq('user_id', user.id)      // extra safety so only your row updates
+      .eq('user_id', user.id)
       .select()
-      .maybeSingle();              // don't force single-object coercion
+      .maybeSingle();
 
     if (error) {
       console.error(error);
@@ -235,7 +235,6 @@
     if (idx !== -1) all[idx] = updated;
     applyFilter();
 });
-
 
 </script>
 
