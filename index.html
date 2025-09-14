@@ -124,9 +124,11 @@
         </a>
         <div class="tags">${(it.tags || []).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
         ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
+        <button class="edit-btn" data-id="${it.id}" style="margin-top:6px;">Edit tags</button>
       </article>
     `).join('');
   }
+
 
   function applyFilter() {
     const terms = normalizeTags(el.filterInput.value);
@@ -185,5 +187,49 @@
     all.unshift(row);
     applyFilter();
   });
+
+  // Edit tags (delegated click on the grid)
+  el.grid.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.edit-btn');
+    if (!btn) return;
+
+    // must be signed in to update
+    const { data: userData } = await sb.auth.getUser();
+    if (!userData?.user) {
+      alert('Please sign in first.');
+      return;
+    }
+
+    const id = btn.dataset.id;
+    const item = all.find(x => x.id === id);
+    if (!item) return;
+
+    // Prompt with current tags prefilled (space or comma separated)
+    const current = (item.tags || []).join(' ');
+    const input = prompt('Edit tags (comma or space separated):', current);
+    if (input === null) return; // cancelled
+
+    const newTags = normalizeTags(input);
+
+    // Update in Supabase
+    const { data: updated, error } = await sb
+      .from('photos')
+      .update({ tags: newTags })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert('Update failed: ' + error.message);
+      return;
+    }
+
+    // Update local cache and re-render with current filter
+    const idx = all.findIndex(x => x.id === id);
+    if (idx !== -1) all[idx] = updated;
+    applyFilter();
+  });
+
 </script>
 
