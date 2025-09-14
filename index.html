@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>RR Inspo — Tiny Gallery with Tags</title>
+<title>rabbit reverie inspo — Tiny Gallery with Tags</title>
 
 <style>
   body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 16px auto; max-width: 920px; padding: 0 12px; }
@@ -23,101 +23,167 @@
   <span class="pill">upload → add tags → filter</span>
 </header>
 
-<section class="toolbar">
-  <input id="file" type="file" accept="image/*" />
-  <input id="tagsInput" type="text" placeholder="tags (comma or space separated)" />
-  <input id="descInput" type="text" placeholder="description (optional)" />
-  <button id="uploadBtn">Upload</button>
-  <input id="filterInput" type="text" placeholder="filter by tag(s)… e.g. lace brown-pink" />
-  <button id="clearBtn">Clear</button>
+<section id="auth" style="margin:20px 0;">
+  <h2>Sign in</h2>
+  <input id="email" type="email" placeholder="email" />
+  <input id="password" type="password" placeholder="password" />
+  <button id="loginBtn">Log in</button>
+  <button id="logoutBtn" style="display:none;">Log out</button>
 </section>
 
-<section id="grid" class="grid"></section>
+<!-- Hide the whole gallery until logged in -->
+<div id="gallery" style="display:none;">
+  <section class="toolbar">
+    <input id="file" type="file" accept="image/*" />
+    <input id="tagsInput" type="text" placeholder="tags (comma or space separated)" />
+    <input id="descInput" type="text" placeholder="description (optional)" />
+    <button id="uploadBtn">Upload</button>
+    <input id="filterInput" type="text" placeholder="filter by tag(s)… e.g. lace brown-pink" />
+    <button id="clearBtn">Clear</button>
+  </section>
+
+  <section id="grid" class="grid"></section>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+  // Your project keys (anon key is okay to embed)
   const SUPABASE_URL = "https://uxcgyjufibsaikpkdrxp.supabase.co";
   const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4Y2d5anVmaWJzYWlrcGtkcnhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc3NTQyNzMsImV4cCI6MjA3MzMzMDI3M30.kBdHEYIasQ_KZeMnRzDq68J1ihLBl1ZWue5QAgDfB8Y";
   const BUCKET = "photos";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
+  // Auth UI wiring
+  const authEl = {
+    email: document.getElementById('email'),
+    password: document.getElementById('password'),
+    loginBtn: document.getElementById('loginBtn'),
+    logoutBtn: document.getElementById('logoutBtn'),
+    gallery: document.getElementById('gallery'),
+    auth: document.getElementById('auth')
+  };
+
+  async function refreshSession() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) {
+      authEl.gallery.style.display = 'block';
+      authEl.logoutBtn.style.display = 'inline-block';
+      authEl.loginBtn.style.display = 'none';
+      authEl.auth.querySelectorAll('input').forEach(i => i.style.display = 'none');
+      loadAll(); // safe to load
+    } else {
+      authEl.gallery.style.display = 'none';
+      authEl.logoutBtn.style.display = 'none';
+      authEl.loginBtn.style.display = 'inline-block';
+      authEl.auth.querySelectorAll('input').forEach(i => i.style.display = 'inline-block');
+    }
+  }
+
+  authEl.loginBtn.addEventListener('click', async () => {
+    const { error } = await sb.auth.signInWithPassword({
+      email: authEl.email.value.trim(),
+      password: authEl.password.value
+    });
+    if (error) { alert(error.message); return; }
+    refreshSession();
+  });
+
+  authEl.logoutBtn.addEventListener('click', async () => {
+    await sb.auth.signOut();
+    refreshSession();
+  });
+
+  refreshSession();
+
+  // Gallery UI wiring
   const el = {
     file: document.getElementById('file'),
     tagsInput: document.getElementById('tagsInput'),
-    descInput: document.getElementById('descInput'), 
+    descInput: document.getElementById('descInput'),
     uploadBtn: document.getElementById('uploadBtn'),
     filterInput: document.getElementById('filterInput'),
     clearBtn: document.getElementById('clearBtn'),
     grid: document.getElementById('grid')
   };
 
-  let all = [];   // [{id,url,tags,created_at}, ...]
-  let view = [];  // filtered
+  let all = []; // [{id,url,tags,description,created_at}, ...]
+  let view = [];
 
   function normalizeTags(str) {
     return (str || '')
-      .split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
+      .split(/[,\s]+/)
+      .map(t => t.trim().toLowerCase())
+      .filter(Boolean);
   }
 
-  function render(items){
+  function render(items) {
     el.grid.innerHTML = items.map(it => `
       <article class="card">
         <a href="${it.url}" target="_blank" rel="noopener">
           <img src="${it.url}" alt="" loading="lazy">
         </a>
-        <div class="tags">${(it.tags||[]).map(t=>`<span class="tag">#${t}</span>`).join('')}</div>
+        <div class="tags">${(it.tags || []).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
         ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
       </article>
     `).join('');
   }
 
-
-
   function applyFilter() {
     const terms = normalizeTags(el.filterInput.value);
-    if (!terms.length) { view = all.slice(); return render(view); }
-    view = all.filter(it => terms.every(t => it.tags.includes(t)));
+    view = !terms.length ? all.slice()
+                         : all.filter(it => terms.every(t => (it.tags || []).includes(t)));
     render(view);
   }
 
   async function loadAll() {
-    const { data, error } = await sb.from('photos').select('*').order('created_at', { ascending: false });
+    const { data, error } = await sb
+      .from('photos')
+      .select('*')
+      .order('created_at', { ascending: false });
     if (error) { console.error(error); return; }
     all = data || [];
-    render(all);
+    applyFilter();
   }
 
   el.filterInput.addEventListener('input', applyFilter);
-  el.clearBtn.addEventListener('click', () => { el.filterInput.value=''; applyFilter(); });
+  el.clearBtn.addEventListener('click', () => { el.filterInput.value = ''; applyFilter(); });
 
   el.uploadBtn.addEventListener('click', async () => {
     const file = el.file.files?.[0];
     if (!file) return alert('Pick an image first');
     const tags = normalizeTags(el.tagsInput.value);
+    const desc = el.descInput.value || null;
+
+    // Must be logged in to upload (so we can set user_id)
+    const { data: userData } = await sb.auth.getUser();
+    const user = userData?.user;
+    if (!user) return alert('Please sign in first.');
 
     // 1) upload to storage
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const key = `${crypto.randomUUID()}.${ext}`;
-    const { data: up, error: upErr } = await sb.storage.from(BUCKET).upload(key, file, { upsert: false });
-    if (upErr) { alert('Upload error'); console.error(upErr); return; }
+    const key = `${user.id}/${crypto.randomUUID()}.${ext}`; // store under your user folder
+    const { error: upErr } = await sb.storage.from(BUCKET).upload(key, file, { upsert: false });
+    if (upErr) { console.error(upErr); return alert('Upload error: ' + upErr.message); }
 
-    // 2) get public URL
-    const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(key);
-    const url = pub?.publicUrl;
+    // 2) get public URL (or signed URL if your bucket is private)
+    const pub = sb.storage.from(BUCKET).getPublicUrl(key);
+    const url = pub?.data?.publicUrl;
+    if (!url) return alert('No public URL returned (check storage policy).');
 
-    // 3) insert row
-    const ins = await sb.from('photos').insert({
-      url,
-      tags,
-      description: el.descInput.value || null   // 👈 add description
-    }).select().single();
+    // 3) insert row with user_id
+    const { data: row, error: insErr } = await sb
+      .from('photos')
+      .insert({ url, tags, description: desc, user_id: user.id })
+      .select()
+      .single();
+    if (insErr) { console.error(insErr); return alert('Save error: ' + insErr.message); }
 
     // 4) reset UI & prepend
     el.file.value = '';
     el.tagsInput.value = '';
+    el.descInput.value = '';
     all.unshift(row);
     applyFilter();
   });
-
-  loadAll();
 </script>
+
