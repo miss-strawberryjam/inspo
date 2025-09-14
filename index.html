@@ -42,7 +42,6 @@
     <button id="clearBtn">Clear</button>
   </section>
 
-  <section id="grid" class="grid"></section>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -110,11 +109,13 @@
   let view = [];
 
   function normalizeTags(str) {
-    return (str || '')
+    const arr = (str || '')
       .split(/[,\s]+/)
       .map(t => t.trim().toLowerCase())
       .filter(Boolean);
+    return Array.from(new Set(arr));
   }
+
 
   function render(items) {
     el.grid.innerHTML = items.map(it => `
@@ -124,10 +125,11 @@
         </a>
         <div class="tags">${(it.tags || []).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
         ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
-        <button class="edit-btn" data-id="${it.id}" style="margin-top:6px;">Edit tags</button>
+        <button class="edit-btn" data-id="${it.id}" style="margin-top:6px;">Edit</button>
       </article>
     `).join('');
   }
+
 
 
 
