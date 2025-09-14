@@ -251,11 +251,17 @@
 
 <script>
 (async () => {
-  console.log("Client URL:", SUPABASE_URL);
-  const buckets = await sb.storage.listBuckets();
-  console.log("listBuckets():", buckets);
+  const { data, error } = await sb.from('photos').select('id,url').limit(30);
+  if (error) return console.error('diag select:', error);
 
-  const list = await sb.storage.from('photos').list('', { limit: 5 });
-  console.log("list('photos'):", list);
+  for (const row of data) {
+    if (!row.url) { console.warn('no url', row.id); continue; }
+    try {
+      const r = await fetch(row.url, { method: 'HEAD' });
+      console.log(row.id, r.status, row.url);
+    } catch (e) {
+      console.log(row.id, 'network-error', row.url);
+    }
+  }
 })();
 </script>
