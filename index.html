@@ -38,6 +38,7 @@
     <input id="tagsInput" type="text" placeholder="tags (comma or space separated)" />
     <input id="descInput" type="text" placeholder="description (optional)" />
     <button id="uploadBtn">Upload</button>
+
     <input id="filterInput" type="text" placeholder="filter by tag(s)… e.g. lace brown-pink" />
     <button id="clearBtn">Clear</button>
 
@@ -51,15 +52,12 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-
 <script>
   // Supabase
   const SUPABASE_URL  = "https://uxcgyjufibsaikpkdrxp.supabase.co";
   const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4Y2d5anVmaWJzYWlrcGtkcnhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc3NTQyNzMsImV4cCI6MjA3MzMzMDI3M30.kBdHEYIasQ_KZeMnRzDq68J1ihLBl1ZWue5QAgDfB8Y";
-  const BUCKET = "photos";
+  const BUCKET = "photos"; // must match your Storage bucket exactly
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-
 
   // Auth UI
   const authEl = {
@@ -71,8 +69,8 @@
     auth: document.getElementById('auth')
   };
 
-  let currentUser = null;          // cache for filters
-  let all = [];                    // loaded rows
+  let currentUser = null;  // cache for filters
+  let all = [];            // loaded rows
 
   async function refreshCurrentUser() {
     const { data } = await sb.auth.getUser();
@@ -130,18 +128,33 @@
     return Array.from(new Set(arr));
   }
 
+  // Build a URL for a row (prefers storage key, falls back to legacy url)
+  function urlFor(item) {
+    if (item.key) {
+      // Public bucket version:
+      return sb.storage.from(BUCKET).getPublicUrl(item.key).data.publicUrl;
+      // If you ever make the bucket private, switch to:
+      // const signed = await sb.storage.from(BUCKET).createSignedUrl(item.key, 3600);
+      // return signed.data.signedUrl;
+    }
+    return item.url || '';
+  }
+
   function render(items) {
-    el.grid.innerHTML = items.map(it => `
-      <article class="card">
-        <a href="${it.url}" target="_blank" rel="noopener">
-          <img src="${it.url}" alt="" loading="lazy">
-        </a>
-        <div class="tags">${(it.tags || []).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
-        ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
-        ${it.user_id ? `<p style="margin:6px 0 0; font-size:12px; opacity:.7;">uploader: ${it.user_id.slice(0,8)}…</p>` : ""}
-        <button class="edit-btn" data-id="${it.id}" style="margin-top:6px;">Edit</button>
-      </article>
-    `).join('');
+    el.grid.innerHTML = items.map(it => {
+      const imgUrl = urlFor(it);
+      return `
+        <article class="card">
+          <a href="${imgUrl}" target="_blank" rel="noopener">
+            <img src="${imgUrl}" alt="" loading="lazy">
+          </a>
+          <div class="tags">${(it.tags || []).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
+          ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
+          ${it.user_id ? `<p style="margin:6px 0 0; font-size:12px; opacity:.7;">uploader: ${it.user_id.slice(0,8)}…</p>` : ""}
+          <button class="edit-btn" data-id="${it.id}" style="margin-top:6px;">Edit</button>
+        </article>
+      `;
+    }).join('');
   }
 
   function applyFilter() {
@@ -188,17 +201,15 @@
     if (!user) return alert('Please sign in first.');
 
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const key = `${user.id}/${crypto.randomUUID()}.${ext}`;
+    const key = `${user.id}/${crypto.randomUUID()}.${ext}`; // store under your user folder
+
     const { error: upErr } = await sb.storage.from(BUCKET).upload(key, file, { upsert: false });
     if (upErr) { console.error(upErr); return alert('Upload error: ' + upErr.message); }
 
-    const pub = sb.storage.from(BUCKET).getPublicUrl(key);
-    const url = pub?.data?.publicUrl;
-    if (!url) return alert('No public URL returned (check storage policy).');
-
+    // Store KEY (not full URL). Keep url null.
     const { data: row, error: insErr } = await sb
       .from('photos')
-      .insert({ url, tags, description: desc, user_id: user.id })
+      .insert({ key, tags, description: desc, user_id: user.id })
       .select()
       .single();
     if (insErr) { console.error(insErr); return alert('Save error: ' + insErr.message); }
@@ -247,21 +258,4 @@
 
   // boot
   refreshSession();
-</script>
-
-<script>
-(async () => {
-  const { data, error } = await sb.from('photos').select('id,url').limit(30);
-  if (error) return console.error('diag select:', error);
-
-  for (const row of data) {
-    if (!row.url) { console.warn('no url', row.id); continue; }
-    try {
-      const r = await fetch(row.url, { method: 'HEAD' });
-      console.log(row.id, r.status, row.url);
-    } catch (e) {
-      console.log(row.id, 'network-error', row.url);
-    }
-  }
-})();
 </script>
