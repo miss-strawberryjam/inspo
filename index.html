@@ -51,12 +51,15 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+
 <script>
   // Supabase
   const SUPABASE_URL  = "https://uxcgyjufibsaikpkdrxp.supabase.co";
   const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4Y2d5anVmaWJzYWlrcGtkcnhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc3NTQyNzMsImV4cCI6MjA3MzMzMDI3M30.kBdHEYIasQ_KZeMnRzDq68J1ihLBl1ZWue5QAgDfB8Y";
   const BUCKET = "photos";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
 
   // Auth UI
   const authEl = {
@@ -244,4 +247,15 @@
 
   // boot
   refreshSession();
+</script>
+
+<script>
+(async () => {
+  console.log("Client URL:", SUPABASE_URL);
+  const buckets = await sb.storage.listBuckets();
+  console.log("listBuckets():", buckets);
+
+  const list = await sb.storage.from('photos').list('', { limit: 5 });
+  console.log("list('photos'):", list);
+})();
 </script>
