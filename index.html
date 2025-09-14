@@ -130,6 +130,7 @@
   }
 
 
+
   function applyFilter() {
     const terms = normalizeTags(el.filterInput.value);
     view = !terms.length ? all.slice()
@@ -193,35 +194,39 @@
     const btn = e.target.closest('.edit-btn');
     if (!btn) return;
 
-    // must be signed in to update
-    const { data: userData } = await sb.auth.getUser();
-    if (!userData?.user) {
-      alert('Please sign in first.');
-      return;
-    }
+    // must be signed in
+    const { data: userData, error: userErr } = await sb.auth.getUser();
+    const user = userData?.user;
+    if (!user) { alert('Please sign in first.'); return; }
 
     const id = btn.dataset.id;
-    const item = all.find(x => x.id === id);
-    if (!item) return;
+    if (!id) { alert('Missing photo id'); return; }
 
-    // Prompt with current tags prefilled (space or comma separated)
+    const item = all.find(x => x.id === id);
+    if (!item) { alert('Could not find that photo in local cache'); return; }
+
     const current = (item.tags || []).join(' ');
     const input = prompt('Edit tags (comma or space separated):', current);
     if (input === null) return; // cancelled
 
     const newTags = normalizeTags(input);
 
-    // Update in Supabase
+    // Update exactly one row you own
     const { data: updated, error } = await sb
       .from('photos')
       .update({ tags: newTags })
       .eq('id', id)
+      .eq('user_id', user.id)      // extra safety so only your row updates
       .select()
-      .single();
+      .maybeSingle();              // don't force single-object coercion
 
     if (error) {
       console.error(error);
       alert('Update failed: ' + error.message);
+      return;
+    }
+    if (!updated) {
+      alert('No row updated (check RLS policy or ownership).');
       return;
     }
 
@@ -229,7 +234,8 @@
     const idx = all.findIndex(x => x.id === id);
     if (idx !== -1) all[idx] = updated;
     applyFilter();
-  });
+});
+
 
 </script>
 
