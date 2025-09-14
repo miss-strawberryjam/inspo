@@ -41,9 +41,14 @@
     <button id="uploadBtn">Upload</button>
     <input id="filterInput" type="text" placeholder="filter by tag(s)… e.g. lace brown-pink" />
     <button id="clearBtn">Clear</button>
+    <label style="display:flex;align-items:center;gap:6px;">
+    <input id="mineOnly" type="checkbox"> Mine only</label>
+
+    <!-- Optional: filter by a specific user_id (UUID) -->
+    <input id="userIdFilter" type="text" placeholder="filter by user_id (optional)" />
+
   </section>
 
-  <!-- put this back -->
   <section id="grid" class="grid"></section>
 </div>
 
@@ -69,18 +74,21 @@
   async function refreshSession() {
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
+      await refreshCurrentUser();    // 👈 cache user for filters
       authEl.gallery.style.display = 'block';
       authEl.logoutBtn.style.display = 'inline-block';
       authEl.loginBtn.style.display = 'none';
       authEl.auth.querySelectorAll('input').forEach(i => i.style.display = 'none');
       loadAll(); // safe to load
     } else {
+      currentUser = null;
       authEl.gallery.style.display = 'none';
       authEl.logoutBtn.style.display = 'none';
       authEl.loginBtn.style.display = 'inline-block';
       authEl.auth.querySelectorAll('input').forEach(i => i.style.display = 'inline-block');
     }
   }
+
 
   authEl.loginBtn.addEventListener('click', async () => {
     const { error } = await sb.auth.signInWithPassword({
@@ -107,7 +115,43 @@
     filterInput: document.getElementById('filterInput'),
     clearBtn: document.getElementById('clearBtn'),
     grid: document.getElementById('grid')
+    mineOnly: document.getElementById('mineOnly'),        
+    userIdFilter: document.getElementById('userIdFilter') 
+};
+
   };
+let currentUser = null; // cache current user for filtering
+
+async function refreshCurrentUser() {
+  const { data } = await sb.auth.getUser();
+  currentUser = data?.user || null;
+}
+
+function applyFilter() {
+  const tagTerms = normalizeTags(el.filterInput.value);
+  const mine = !!el.mineOnly?.checked;
+  const userIdTerm = (el.userIdFilter?.value || '').trim().toLowerCase();
+
+  // start with all rows
+  let items = all.slice();
+
+  // 1) tag AND filter
+  if (tagTerms.length) {
+    items = items.filter(it => tagTerms.every(t => (it.tags || []).includes(t)));
+  }
+
+  // 2) uploader filter: "Mine only"
+  if (mine && currentUser) {
+    items = items.filter(it => it.user_id === currentUser.id);
+  }
+
+  // 3) optional filter by user_id substring
+  if (userIdTerm) {
+    items = items.filter(it => (it.user_id || '').toLowerCase().includes(userIdTerm));
+  }
+
+  render(items);
+}
 
   let all = []; // [{id,url,tags,description,created_at}, ...]
   let view = [];
@@ -129,6 +173,7 @@
         </a>
         <div class="tags">${(it.tags || []).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
         ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
+        ${it.user_id ? `<p style="margin:6px 0 0; font-size:12px; opacity:.7;">uploader: ${it.user_id.slice(0,8)}…</p>` : ""}
         <button class="edit-btn" data-id="${it.id}" style="margin-top:6px;">Edit</button>
       </article>
     `).join('');
@@ -137,12 +182,40 @@
 
 
 
-  function applyFilter() {
-    const terms = normalizeTags(el.filterInput.value);
-    view = !terms.length ? all.slice()
-                         : all.filter(it => terms.every(t => (it.tags || []).includes(t)));
-    render(view);
+
+let currentUser = null; // cache current user for filtering
+
+async function refreshCurrentUser() {
+  const { data } = await sb.auth.getUser();
+  currentUser = data?.user || null;
+}
+
+function applyFilter() {
+  const tagTerms = normalizeTags(el.filterInput.value);
+  const mine = !!el.mineOnly?.checked;
+  const userIdTerm = (el.userIdFilter?.value || '').trim().toLowerCase();
+
+  // start with all rows
+  let items = all.slice();
+
+  // 1) tag AND filter
+  if (tagTerms.length) {
+    items = items.filter(it => tagTerms.every(t => (it.tags || []).includes(t)));
   }
+
+  // 2) uploader filter: "Mine only"
+  if (mine && currentUser) {
+    items = items.filter(it => it.user_id === currentUser.id);
+  }
+
+  // 3) optional filter by user_id substring
+  if (userIdTerm) {
+    items = items.filter(it => (it.user_id || '').toLowerCase().includes(userIdTerm));
+  }
+
+  render(items);
+}
+
 
   async function loadAll() {
     const { data, error } = await sb
@@ -156,6 +229,9 @@
 
   el.filterInput.addEventListener('input', applyFilter);
   el.clearBtn.addEventListener('click', () => { el.filterInput.value = ''; applyFilter(); });
+  el.mineOnly?.addEventListener('change', applyFilter);
+  el.userIdFilter?.addEventListener('input', applyFilter);
+
 
   el.uploadBtn.addEventListener('click', async () => {
     const file = el.file.files?.[0];
