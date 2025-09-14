@@ -4,18 +4,18 @@
 <title>rabbit reverie inspo — Tiny Gallery with Tags</title>
 
 <style>
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 16px auto; max-width: 920px; padding: 0 12px; }
-  header { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 12px; }
-  .card { border: 1px solid #eee; padding: 8px; border-radius: 8px; background: #fff; }
-  .card img { width: 100%; height: 160px; object-fit: cover; border-radius: 6px; }
-  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .tag { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: #f3f0f7; border: 1px dashed #d8cfe8; }
-  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
-  input[type="file"] { max-width: 240px; }
-  input[type="text"] { flex: 1; min-width: 180px; padding: 8px; }
-  button { padding: 8px 12px; cursor: pointer; }
-  .pill { padding: 6px 10px; border: 1px dashed #d8cfe8; border-radius: 999px; background: #faf7ff; }
+  body { font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; margin:16px auto; max-width:920px; padding:0 12px; }
+  header { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
+  .card { border:1px solid #eee; padding:8px; border-radius:8px; background:#fff; }
+  .card img { width:100%; height:160px; object-fit:cover; border-radius:6px; }
+  .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .tag { font-size:12px; padding:3px 8px; border-radius:999px; background:#f3f0f7; border:1px dashed #d8cfe8; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+  input[type="file"] { max-width:240px; }
+  input[type="text"] { flex:1; min-width:180px; padding:8px; }
+  button { padding:8px 12px; cursor:pointer; }
+  .pill { padding:6px 10px; border:1px dashed #d8cfe8; border-radius:999px; background:#faf7ff; }
 </style>
 
 <header>
@@ -32,7 +32,6 @@
 </section>
 
 <!-- Hide the whole gallery until logged in -->
-<!-- Hide the whole gallery until logged in -->
 <div id="gallery" style="display:none;">
   <section class="toolbar">
     <input id="file" type="file" accept="image/*" />
@@ -41,27 +40,25 @@
     <button id="uploadBtn">Upload</button>
     <input id="filterInput" type="text" placeholder="filter by tag(s)… e.g. lace brown-pink" />
     <button id="clearBtn">Clear</button>
+
     <label style="display:flex;align-items:center;gap:6px;">
-    <input id="mineOnly" type="checkbox"> Mine only</label>
-
-    <!-- Optional: filter by a specific user_id (UUID) -->
+      <input id="mineOnly" type="checkbox"> Mine only
+    </label>
     <input id="userIdFilter" type="text" placeholder="filter by user_id (optional)" />
-
   </section>
 
   <section id="grid" class="grid"></section>
 </div>
 
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  // Your project keys (anon key is okay to embed)
-  const SUPABASE_URL = "https://uxcgyjufibsaikpkdrxp.supabase.co";
+  // Supabase
+  const SUPABASE_URL  = "https://uxcgyjufibsaikpkdrxp.supabase.co";
   const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4Y2d5anVmaWJzYWlrcGtkcnhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc3NTQyNzMsImV4cCI6MjA3MzMzMDI3M30.kBdHEYIasQ_KZeMnRzDq68J1ihLBl1ZWue5QAgDfB8Y";
   const BUCKET = "photos";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-  // Auth UI wiring
+  // Auth UI
   const authEl = {
     email: document.getElementById('email'),
     password: document.getElementById('password'),
@@ -71,15 +68,23 @@
     auth: document.getElementById('auth')
   };
 
+  let currentUser = null;          // cache for filters
+  let all = [];                    // loaded rows
+
+  async function refreshCurrentUser() {
+    const { data } = await sb.auth.getUser();
+    currentUser = data?.user || null;
+  }
+
   async function refreshSession() {
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
-      await refreshCurrentUser();    // 👈 cache user for filters
+      await refreshCurrentUser();
       authEl.gallery.style.display = 'block';
       authEl.logoutBtn.style.display = 'inline-block';
       authEl.loginBtn.style.display = 'none';
       authEl.auth.querySelectorAll('input').forEach(i => i.style.display = 'none');
-      loadAll(); // safe to load
+      loadAll();
     } else {
       currentUser = null;
       authEl.gallery.style.display = 'none';
@@ -88,7 +93,6 @@
       authEl.auth.querySelectorAll('input').forEach(i => i.style.display = 'inline-block');
     }
   }
-
 
   authEl.loginBtn.addEventListener('click', async () => {
     const { error } = await sb.auth.signInWithPassword({
@@ -104,9 +108,7 @@
     refreshSession();
   });
 
-  refreshSession();
-
-  // Gallery UI wiring
+  // Gallery refs
   const el = {
     file: document.getElementById('file'),
     tagsInput: document.getElementById('tagsInput'),
@@ -114,56 +116,16 @@
     uploadBtn: document.getElementById('uploadBtn'),
     filterInput: document.getElementById('filterInput'),
     clearBtn: document.getElementById('clearBtn'),
-    grid: document.getElementById('grid')
-    mineOnly: document.getElementById('mineOnly'),        
-    userIdFilter: document.getElementById('userIdFilter') 
-};
-
+    grid: document.getElementById('grid'),
+    mineOnly: document.getElementById('mineOnly'),
+    userIdFilter: document.getElementById('userIdFilter')
   };
-let currentUser = null; // cache current user for filtering
-
-async function refreshCurrentUser() {
-  const { data } = await sb.auth.getUser();
-  currentUser = data?.user || null;
-}
-
-function applyFilter() {
-  const tagTerms = normalizeTags(el.filterInput.value);
-  const mine = !!el.mineOnly?.checked;
-  const userIdTerm = (el.userIdFilter?.value || '').trim().toLowerCase();
-
-  // start with all rows
-  let items = all.slice();
-
-  // 1) tag AND filter
-  if (tagTerms.length) {
-    items = items.filter(it => tagTerms.every(t => (it.tags || []).includes(t)));
-  }
-
-  // 2) uploader filter: "Mine only"
-  if (mine && currentUser) {
-    items = items.filter(it => it.user_id === currentUser.id);
-  }
-
-  // 3) optional filter by user_id substring
-  if (userIdTerm) {
-    items = items.filter(it => (it.user_id || '').toLowerCase().includes(userIdTerm));
-  }
-
-  render(items);
-}
-
-  let all = []; // [{id,url,tags,description,created_at}, ...]
-  let view = [];
 
   function normalizeTags(str) {
     const arr = (str || '')
-      .split(/[,\s]+/)
-      .map(t => t.trim().toLowerCase())
-      .filter(Boolean);
+      .split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
     return Array.from(new Set(arr));
   }
-
 
   function render(items) {
     el.grid.innerHTML = items.map(it => `
@@ -179,59 +141,38 @@ function applyFilter() {
     `).join('');
   }
 
+  function applyFilter() {
+    const tagTerms = normalizeTags(el.filterInput.value);
+    const mine = !!el.mineOnly?.checked;
+    const userIdTerm = (el.userIdFilter?.value || '').trim().toLowerCase();
 
+    let items = all.slice();
 
+    if (tagTerms.length) {
+      items = items.filter(it => tagTerms.every(t => (it.tags || []).includes(t)));
+    }
+    if (mine && currentUser) {
+      items = items.filter(it => it.user_id === currentUser.id);
+    }
+    if (userIdTerm) {
+      items = items.filter(it => (it.user_id || '').toLowerCase().includes(userIdTerm));
+    }
 
-
-let currentUser = null; // cache current user for filtering
-
-async function refreshCurrentUser() {
-  const { data } = await sb.auth.getUser();
-  currentUser = data?.user || null;
-}
-
-function applyFilter() {
-  const tagTerms = normalizeTags(el.filterInput.value);
-  const mine = !!el.mineOnly?.checked;
-  const userIdTerm = (el.userIdFilter?.value || '').trim().toLowerCase();
-
-  // start with all rows
-  let items = all.slice();
-
-  // 1) tag AND filter
-  if (tagTerms.length) {
-    items = items.filter(it => tagTerms.every(t => (it.tags || []).includes(t)));
+    render(items);
   }
-
-  // 2) uploader filter: "Mine only"
-  if (mine && currentUser) {
-    items = items.filter(it => it.user_id === currentUser.id);
-  }
-
-  // 3) optional filter by user_id substring
-  if (userIdTerm) {
-    items = items.filter(it => (it.user_id || '').toLowerCase().includes(userIdTerm));
-  }
-
-  render(items);
-}
-
 
   async function loadAll() {
-    const { data, error } = await sb
-      .from('photos')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { data, error } = await sb.from('photos').select('*').order('created_at', { ascending: false });
     if (error) { console.error(error); return; }
     all = data || [];
     applyFilter();
   }
 
+  // Listeners
   el.filterInput.addEventListener('input', applyFilter);
   el.clearBtn.addEventListener('click', () => { el.filterInput.value = ''; applyFilter(); });
-  el.mineOnly?.addEventListener('change', applyFilter);
-  el.userIdFilter?.addEventListener('input', applyFilter);
-
+  el.mineOnly.addEventListener('change', applyFilter);
+  el.userIdFilter.addEventListener('input', applyFilter);
 
   el.uploadBtn.addEventListener('click', async () => {
     const file = el.file.files?.[0];
@@ -239,23 +180,19 @@ function applyFilter() {
     const tags = normalizeTags(el.tagsInput.value);
     const desc = el.descInput.value || null;
 
-    // Must be logged in to upload (so we can set user_id)
     const { data: userData } = await sb.auth.getUser();
     const user = userData?.user;
     if (!user) return alert('Please sign in first.');
 
-    // 1) upload to storage
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const key = `${user.id}/${crypto.randomUUID()}.${ext}`; // store under your user folder
+    const key = `${user.id}/${crypto.randomUUID()}.${ext}`;
     const { error: upErr } = await sb.storage.from(BUCKET).upload(key, file, { upsert: false });
     if (upErr) { console.error(upErr); return alert('Upload error: ' + upErr.message); }
 
-    // 2) get public URL (or signed URL if your bucket is private)
     const pub = sb.storage.from(BUCKET).getPublicUrl(key);
     const url = pub?.data?.publicUrl;
     if (!url) return alert('No public URL returned (check storage policy).');
 
-    // 3) insert row with user_id
     const { data: row, error: insErr } = await sb
       .from('photos')
       .insert({ url, tags, description: desc, user_id: user.id })
@@ -263,7 +200,6 @@ function applyFilter() {
       .single();
     if (insErr) { console.error(insErr); return alert('Save error: ' + insErr.message); }
 
-    // 4) reset UI & prepend
     el.file.value = '';
     el.tagsInput.value = '';
     el.descInput.value = '';
@@ -271,21 +207,18 @@ function applyFilter() {
     applyFilter();
   });
 
-  // Edit tags (delegated click on the grid)
+  // Edit tags + description
   el.grid.addEventListener('click', async (e) => {
     const btn = e.target.closest('.edit-btn');
     if (!btn) return;
 
-    // must be signed in
-    const { data: userData, error: userErr } = await sb.auth.getUser();
+    const { data: userData } = await sb.auth.getUser();
     const user = userData?.user;
     if (!user) { alert('Please sign in first.'); return; }
 
     const id = btn.dataset.id;
-    if (!id) { alert('Missing photo id'); return; }
-
     const item = all.find(x => x.id === id);
-    if (!item) { alert('Could not find that photo in local cache'); return; }
+    if (!id || !item) { alert('Could not find this photo'); return; }
 
     const tagsInput = prompt('Tags (comma/space separated):', (item.tags||[]).join(' '));
     if (tagsInput === null) return;
@@ -302,21 +235,13 @@ function applyFilter() {
       .select()
       .maybeSingle();
 
-    if (error) {
-      console.error(error);
-      alert('Update failed: ' + error.message);
-      return;
-    }
-    if (!updated) {
-      alert('No row updated (check RLS policy or ownership).');
-      return;
-    }
+    if (error || !updated) { console.error(error); alert('Update failed'); return; }
 
-    // Update local cache and re-render with current filter
     const idx = all.findIndex(x => x.id === id);
     if (idx !== -1) all[idx] = updated;
     applyFilter();
-});
+  });
 
+  // boot
+  refreshSession();
 </script>
-
