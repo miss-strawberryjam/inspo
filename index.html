@@ -143,6 +143,9 @@
   function render(items) {
     el.grid.innerHTML = items.map(it => {
       const imgUrl = urlFor(it);
+      const updated = it.updated_at
+        ? new Date(it.updated_at).toLocaleString()
+        : '';
       return `
         <article class="card">
           <a href="${imgUrl}" target="_blank" rel="noopener">
@@ -150,7 +153,7 @@
           </a>
           <div class="tags">${(it.tags || []).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
           ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
-          ${it.user_id ? `<p style="margin:6px 0 0; font-size:12px; opacity:.7;">uploader: ${it.user_id.slice(0,8)}…</p>` : ""}
+          ${updated ? `<p style="font-size:11px; color:#777; margin-top:4px;">updated ${updated}</p>` : ""}
           <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
             <button class="edit-btn" data-id="${it.id}">Edit</button>
             <button class="del-btn" data-id="${it.id}">Delete</button>
@@ -159,6 +162,7 @@
       `;
     }).join('');
   }
+
 
 
   function keyFor(item) {
