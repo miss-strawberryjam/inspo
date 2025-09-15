@@ -43,6 +43,7 @@
     position:fixed; inset:0; z-index:100; display:grid; place-items:center;
     background:rgba(0,0,0,.35);
   }
+  #rr-board-modal[hidden]{ display:none !important; }
   .rr-board{ width:min(96vw,1000px); background:var(--rr-cream); border:2px dashed var(--rr-rose-dark); border-radius:16px; padding:12px; }
   .rr-board-header{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
   .rr-board-header h2{ margin:0; font-size:18px; color:var(--rr-ink); }
@@ -104,7 +105,7 @@
   <section id="grid" class="grid"></section>
 </div>
 
-<!-- ✿ Mood Board UI (can sit anywhere after #grid) -->
+<!-- ✿ Mood Board UI -->
 <button id="rr-make-board" hidden aria-live="polite">Make Mood Board ✿</button>
 
 <div id="rr-board-modal" hidden role="dialog" aria-modal="true" aria-label="Mood board">
@@ -118,8 +119,8 @@
           <option value="gingham">Gingham</option>
           <option value="lace">Lace</option>
         </select>
-        <button id="rr-save-png" title="Download as PNG">Save PNG</button>
-        <button id="rr-close-board" type="button" data-close>Close</button>
+        <button id="rr-save-png" title="Download as PNG" type="button">Save PNG</button>
+        <button id="rr-close-board" title="Close" type="button" data-close>Close</button>
       </div>
     </header>
     <div id="rr-board-canvas" class="rr-grid"></div>
@@ -199,7 +200,7 @@
 
   function normalizeTags(str) {
     const arr = (str || '')
-      .split(/[,\n\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
+      .split(/[\,\n\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
     return Array.from(new Set(arr));
   }
 
@@ -398,17 +399,16 @@
 <!-- ✿ html2canvas for PNG export -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
-<!-- ✿ Mood-board behavior (isolated) -->
+<!-- ✿ Mood-board behavior with robust closing -->
 <script type="module">
   const IMG_SELECTOR = '.grid .card img';
   const selected = new Set();
 
-  function addSelectButtons(root=document){
-    const imgs = Array.from(root.querySelectorAll(IMG_SELECTOR))
+  function addSelectButtons(){
+    const imgs = Array.from(document.querySelectorAll(IMG_SELECTOR))
       .filter(img => img.src && !img.closest('.card').querySelector('.rr-select-btn'));
-
     imgs.forEach(img => {
-      const wrapper = img.closest('.card') || img.parentElement;
+      const wrapper = img.closest('.card');
       if (!wrapper) return;
       const btn = document.createElement('button');
       btn.className = 'rr-select-btn';
@@ -417,7 +417,6 @@
       btn.setAttribute('title','Select for mood board');
       btn.textContent = '♡';
       btn.dataset.url = img.src;
-
       btn.addEventListener('click', () => {
         const url = btn.dataset.url;
         const on = btn.getAttribute('aria-pressed') === 'true';
@@ -426,7 +425,6 @@
         on ? selected.delete(url) : selected.add(url);
         updateFAB();
       });
-
       wrapper.appendChild(btn);
     });
   }
@@ -446,6 +444,7 @@
     modal.hidden = false;
     document.documentElement.style.overflow = 'hidden';
   }
+
   function closeBoard(){
     const modal = document.getElementById('rr-board-modal');
     if (!modal.hidden) {
@@ -454,20 +453,33 @@
     }
   }
 
-  // Delegate clicks inside the modal (works even after re-renders)
+  async function savePNG(){
+    const node = document.getElementById('rr-board-canvas');
+    const canvas = await html2canvas(node, {useCORS:true, backgroundColor:null, scale:2});
+    const link = document.createElement('a');
+    link.download = 'rabbit-reverie-moodboard.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+
+  function applyBackground(){
+    const val = document.getElementById('rr-bg').value;
+    const canvas = document.getElementById('rr-board-canvas');
+    canvas.className = 'rr-grid';
+    if (val) canvas.classList.add(`rr-bg-${val}`);
+  }
+
   function bindModalEvents(){
     const modal = document.getElementById('rr-board-modal');
 
-    // Close when clicking the dedicated button
+    // Delegate clicks: Close button or backdrop
     modal.addEventListener('click', (e) => {
-      // (1) Clicked a [data-close] button
-      if (e.target.closest('[data-close]')) {
+      if (e.target.closest('[data-close]')) { // clicked a close button
         e.preventDefault();
         closeBoard();
         return;
       }
-      // (2) Clicked the backdrop, not the inner board
-      if (e.target === modal) {
+      if (e.target === modal) { // clicked the backdrop outside .rr-board
         closeBoard();
       }
     });
@@ -478,7 +490,6 @@
     });
   }
 
-  // Call this once in init()
   function init(){
     addSelectButtons();
     updateFAB();
@@ -488,13 +499,11 @@
 
     // Observe grid for re-renders
     const grid = document.getElementById('grid');
-    const obs = new MutationObserver(() => addSelectButtons(grid));
+    const obs = new MutationObserver(() => addSelectButtons());
     obs.observe(grid, {childList:true, subtree:true});
 
-    // NEW: bind modal events
     bindModalEvents();
   }
-
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
