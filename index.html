@@ -119,7 +119,7 @@
           <option value="lace">Lace</option>
         </select>
         <button id="rr-save-png" title="Download as PNG">Save PNG</button>
-        <button id="rr-close-board" title="Close">Close</button>
+        <button id="rr-close-board" type="button" data-close>Close</button>
       </div>
     </header>
     <div id="rr-board-canvas" class="rr-grid"></div>
@@ -446,29 +446,43 @@
     modal.hidden = false;
     document.documentElement.style.overflow = 'hidden';
   }
-  function closeBoard(){ document.getElementById('rr-board-modal').hidden = true; document.documentElement.style.overflow = ''; }
-
-  async function savePNG(){
-    const node = document.getElementById('rr-board-canvas');
-    const canvas = await html2canvas(node, {useCORS:true, backgroundColor:null, scale:2});
-    const link = document.createElement('a');
-    link.download = 'rabbit-reverie-moodboard.png';
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+  function closeBoard(){
+    const modal = document.getElementById('rr-board-modal');
+    if (!modal.hidden) {
+      modal.hidden = true;
+      document.documentElement.style.overflow = '';
+    }
   }
 
-  function applyBackground(){
-    const val = document.getElementById('rr-bg').value;
-    const canvas = document.getElementById('rr-board-canvas');
-    canvas.className = 'rr-grid';
-    if (val) canvas.classList.add(`rr-bg-${val}`);
+  // Delegate clicks inside the modal (works even after re-renders)
+  function bindModalEvents(){
+    const modal = document.getElementById('rr-board-modal');
+
+    // Close when clicking the dedicated button
+    modal.addEventListener('click', (e) => {
+      // (1) Clicked a [data-close] button
+      if (e.target.closest('[data-close]')) {
+        e.preventDefault();
+        closeBoard();
+        return;
+      }
+      // (2) Clicked the backdrop, not the inner board
+      if (e.target === modal) {
+        closeBoard();
+      }
+    });
+
+    // Close on Esc
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeBoard();
+    });
   }
 
+  // Call this once in init()
   function init(){
     addSelectButtons();
     updateFAB();
     document.getElementById('rr-make-board').addEventListener('click', openBoard);
-    document.getElementById('rr-close-board').addEventListener('click', closeBoard);
     document.getElementById('rr-save-png').addEventListener('click', savePNG);
     document.getElementById('rr-bg').addEventListener('change', applyBackground);
 
@@ -476,7 +490,11 @@
     const grid = document.getElementById('grid');
     const obs = new MutationObserver(() => addSelectButtons(grid));
     obs.observe(grid, {childList:true, subtree:true});
+
+    // NEW: bind modal events
+    bindModalEvents();
   }
+
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
