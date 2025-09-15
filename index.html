@@ -7,7 +7,7 @@
   body { font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; margin:16px auto; max-width:920px; padding:0 12px; }
   header { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
-  .card { border:1px solid #eee; padding:8px; border-radius:8px; background:#fff; }
+  .card { border:1px solid #eee; padding:8px; border-radius:8px; background:#fff; position:relative; }
   .card img { width:100%; height:160px; object-fit:cover; border-radius:6px; }
   .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
   .tag { font-size:12px; padding:3px 8px; border-radius:999px; background:#f3f0f7; border:1px dashed #d8cfe8; }
@@ -16,6 +16,58 @@
   input[type="text"] { flex:1; min-width:180px; padding:8px; }
   button { padding:8px 12px; cursor:pointer; }
   .pill { padding:6px 10px; border:1px dashed #d8cfe8; border-radius:999px; background:#faf7ff; }
+
+  /* ✿ Mood-board styles */
+  :root{
+    --rr-rose:#e8cdd6;
+    --rr-rose-dark:#d9b5c2;
+    --rr-cream:#fff8f9;
+    --rr-ink:#5a4a4f;
+  }
+  .rr-select-btn{
+    position:absolute; top:8px; right:8px;
+    border:none; border-radius:999px; padding:6px 9px;
+    background:rgba(255,255,255,.85); box-shadow:0 2px 6px rgba(0,0,0,.12);
+    font-size:14px; line-height:1; cursor:pointer; color:var(--rr-ink);
+  }
+  .rr-select-btn[aria-pressed="true"]{ background:var(--rr-rose); color:#613a49; }
+
+  #rr-make-board{
+    position:fixed; right:16px; bottom:16px; z-index:60;
+    padding:10px 14px; border-radius:999px; border:2px solid var(--rr-rose-dark);
+    background:var(--rr-cream); color:var(--rr-ink); font-weight:600; cursor:pointer;
+    box-shadow:0 4px 12px rgba(0,0,0,.15);
+  }
+
+  #rr-board-modal{
+    position:fixed; inset:0; z-index:100; display:grid; place-items:center;
+    background:rgba(0,0,0,.35);
+  }
+  .rr-board{ width:min(96vw,1000px); background:var(--rr-cream); border:2px dashed var(--rr-rose-dark); border-radius:16px; padding:12px; }
+  .rr-board-header{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+  .rr-board-header h2{ margin:0; font-size:18px; color:var(--rr-ink); }
+  .rr-header-actions{ display:flex; gap:8px; align-items:center; }
+  .rr-header-actions button, .rr-header-actions select{ border:1.5px solid var(--rr-rose-dark); background:white; padding:6px 10px; border-radius:12px; cursor:pointer; }
+
+  #rr-board-canvas.rr-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; padding:8px; background:#fff; border-radius:10px; min-height:200px; }
+  #rr-board-canvas img{ width:100%; height:160px; object-fit:cover; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+
+  #rr-board-canvas.rr-bg-pastel{ background:linear-gradient(180deg,#fff,#fff6f9 55%,#fdf3f8); }
+  #rr-board-canvas.rr-bg-gingham{
+    --g:#f8dfe7; --w:#ffffff;
+    background-image:
+      linear-gradient(45deg, var(--g) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--g) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--g) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--g) 75%);
+    background-size:20px 20px; background-position:0 0,0 10px,10px -10px,-10px 0;
+  }
+  #rr-board-canvas.rr-bg-lace{ background:radial-gradient(circle at 10px 10px, rgba(0,0,0,0.06) 2px, transparent 2px) 0 0/20px 20px, #fff; border:3px double var(--rr-rose-dark); }
+
+  @media (max-width:520px){
+    #rr-board-canvas.rr-grid{ grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); }
+    #rr-board-canvas img{ height:120px; }
+  }
 </style>
 
 <header>
@@ -50,6 +102,28 @@
   </section>
 
   <section id="grid" class="grid"></section>
+</div>
+
+<!-- ✿ Mood Board UI (can sit anywhere after #grid) -->
+<button id="rr-make-board" hidden aria-live="polite">Make Mood Board ✿</button>
+
+<div id="rr-board-modal" hidden role="dialog" aria-modal="true" aria-label="Mood board">
+  <div class="rr-board">
+    <header class="rr-board-header">
+      <h2>Your Mood Board ✿</h2>
+      <div class="rr-header-actions">
+        <select id="rr-bg">
+          <option value="">Background: None</option>
+          <option value="pastel">Pastel</option>
+          <option value="gingham">Gingham</option>
+          <option value="lace">Lace</option>
+        </select>
+        <button id="rr-save-png" title="Download as PNG">Save PNG</button>
+        <button id="rr-close-board" title="Close">Close</button>
+      </div>
+    </header>
+    <div id="rr-board-canvas" class="rr-grid"></div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -125,7 +199,7 @@
 
   function normalizeTags(str) {
     const arr = (str || '')
-      .split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
+      .split(/[,\n\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
     return Array.from(new Set(arr));
   }
 
@@ -154,7 +228,7 @@
           </a>
           <div class="tags">${(it.tags || []).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
           ${it.description ? `<p style="font-size:13px;margin-top:4px;">${it.description}</p>` : ""}
-          ${updated ? `<p style="font-size:11px; color:#777; margin-top:4px;">updated ${updated}</p>` : ""}
+          ${updated ? `<p style=\"font-size:11px; color:#777; margin-top:4px;\">updated ${updated}</p>` : ""}
           <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
             <button class="edit-btn" data-id="${it.id}">Edit</button>
             <button class="del-btn" data-id="${it.id}">Delete</button>
@@ -164,15 +238,13 @@
     }).join('');
   }
 
-
-
   function keyFor(item) {
-  if (item.key) return item.key;                  // new rows
-  if (item.url) {                                 // legacy rows with full URL
-    const m = item.url.match(/\/object\/public\/photos\/(.+)$/);
-    if (m) return m[1];
-  }
-  return null;
+    if (item.key) return item.key;                  // new rows
+    if (item.url) {                                 // legacy rows with full URL
+      const m = item.url.match(/\/object\/public\/photos\/(.+)$/);
+      if (m) return m[1];
+    }
+    return null;
   }
 
   function applyFilter() {
@@ -319,7 +391,94 @@
     applyFilter();
   });
 
-
   // boot
   refreshSession();
+</script>
+
+<!-- ✿ html2canvas for PNG export -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+<!-- ✿ Mood-board behavior (isolated) -->
+<script type="module">
+  const IMG_SELECTOR = '.grid .card img';
+  const selected = new Set();
+
+  function addSelectButtons(root=document){
+    const imgs = Array.from(root.querySelectorAll(IMG_SELECTOR))
+      .filter(img => img.src && !img.closest('.card').querySelector('.rr-select-btn'));
+
+    imgs.forEach(img => {
+      const wrapper = img.closest('.card') || img.parentElement;
+      if (!wrapper) return;
+      const btn = document.createElement('button');
+      btn.className = 'rr-select-btn';
+      btn.type = 'button';
+      btn.setAttribute('aria-pressed','false');
+      btn.setAttribute('title','Select for mood board');
+      btn.textContent = '♡';
+      btn.dataset.url = img.src;
+
+      btn.addEventListener('click', () => {
+        const url = btn.dataset.url;
+        const on = btn.getAttribute('aria-pressed') === 'true';
+        btn.setAttribute('aria-pressed', String(!on));
+        btn.textContent = on ? '♡' : '♥';
+        on ? selected.delete(url) : selected.add(url);
+        updateFAB();
+      });
+
+      wrapper.appendChild(btn);
+    });
+  }
+
+  function updateFAB(){
+    const fab = document.getElementById('rr-make-board');
+    fab.hidden = selected.size === 0;
+    fab.textContent = selected.size ? `Make Mood Board ✿ (${selected.size})` : 'Make Mood Board ✿';
+  }
+
+  function openBoard(){
+    const modal = document.getElementById('rr-board-modal');
+    const canvas = document.getElementById('rr-board-canvas');
+    canvas.className = 'rr-grid';
+    canvas.innerHTML = '';
+    [...selected].forEach(u => { const img = new Image(); img.src = u; img.loading='lazy'; img.decoding='async'; canvas.appendChild(img); });
+    modal.hidden = false;
+    document.documentElement.style.overflow = 'hidden';
+  }
+  function closeBoard(){ document.getElementById('rr-board-modal').hidden = true; document.documentElement.style.overflow = ''; }
+
+  async function savePNG(){
+    const node = document.getElementById('rr-board-canvas');
+    const canvas = await html2canvas(node, {useCORS:true, backgroundColor:null, scale:2});
+    const link = document.createElement('a');
+    link.download = 'rabbit-reverie-moodboard.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+
+  function applyBackground(){
+    const val = document.getElementById('rr-bg').value;
+    const canvas = document.getElementById('rr-board-canvas');
+    canvas.className = 'rr-grid';
+    if (val) canvas.classList.add(`rr-bg-${val}`);
+  }
+
+  function init(){
+    addSelectButtons();
+    updateFAB();
+    document.getElementById('rr-make-board').addEventListener('click', openBoard);
+    document.getElementById('rr-close-board').addEventListener('click', closeBoard);
+    document.getElementById('rr-save-png').addEventListener('click', savePNG);
+    document.getElementById('rr-bg').addEventListener('change', applyBackground);
+
+    // Observe grid for re-renders
+    const grid = document.getElementById('grid');
+    const obs = new MutationObserver(() => addSelectButtons(grid));
+    obs.observe(grid, {childList:true, subtree:true});
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else { init(); }
 </script>
